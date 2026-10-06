@@ -1,4 +1,4 @@
-﻿# Rust Code Raid Counter
+# Rust Code Raid Counter
 
 A lightweight, always-on-top overlay for code raiding in Rust. Cycle through common 4-digit lock combinations hands-free using global hotkeys without alt-tabbing or managing spreadsheets.
 
@@ -17,13 +17,21 @@ A lightweight, always-on-top overlay for code raiding in Rust. Cycle through com
 
 ## Download (v1.0.0)
 
-Grab the standalone build from the [Releases](https://github.com/Welsonnot/rust-code-raider-widget/releases) page:
+Grab the standalone build from the [Releases](https://github.com/Welsonnot/rust-code-raider-widget/releases/tag/v1.0.0) page:
 
-**[Download Rust-Code-Raider-v1.0.0-Windows.zip](https://github.com/Welsonnot/rust-code-raider-widget/releases/download/v1.0.0/Rust-Code-Raider-v1.0.0-Windows.zip)**
+**[Release Rust Code Raider v1.0.0](https://github.com/Welsonnot/rust-code-raider-widget/releases/tag/v1.0.0)**
 
 1. Download and extract the .zip anywhere on your PC.
 2. Run Rust Code Raider.exe.
 3. Set Rust to **Borderless Windowed** mode so the overlay stays visible over your game.
+
+---
+
+## Video Tutorial
+
+[![Rust Code Raid Widget](https://img.youtube.com/vi/dYVuXPU-2es/0.jpg)](https://www.youtube.com/watch?v=dYVuXPU-2es)
+
+[Rust Code Raid Widget](https://www.youtube.com/watch?v=dYVuXPU-2es)
 
 ---
 
