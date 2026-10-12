@@ -2,7 +2,7 @@
 
 A lightweight, always-on-top overlay for code raiding in Rust. Cycle through common 4-digit lock combinations hands-free using global hotkeys without alt-tabbing or managing spreadsheets.
 
-[![Version](https://img.shields.io/badge/Version-v1.0.0-brightgreen.svg)](https://github.com/Welsonnot/rust-code-raider-widget/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/Version-v1.1.0-brightgreen.svg)](https://github.com/Welsonnot/rust-code-raider-widget/releases)
 [![Platform](https://img.shields.io/badge/Platform-Windows_x64-blue.svg)](https://github.com/Welsonnot/rust-code-raider-widget)
 [![Framework](https://img.shields.io/badge/Made_with-Flutter-02569B.svg)](https://flutter.dev)
 [![License](https://img.shields.io/badge/License-PolyForm_Noncommercial-lightgrey.svg)](LICENSE)
@@ -10,16 +10,16 @@ A lightweight, always-on-top overlay for code raiding in Rust. Cycle through com
 <br />
 
 <div align="center">
-  <img src="screenshots/Screenshot%202026-10-07%20053113.png" width="460" alt="Rust Code Raid Counter v1.0.0" />
+  <img src="screenshots/Screenshot%202026-10-07%20053120.png" width="460" alt="Rust Code Raid Counter v1.1.0" />
 </div>
 
 <br />
 
-## Download (v1.0.0)
+## Download (v1.1.0)
 
-Grab the standalone build from the [Releases](https://github.com/Welsonnot/rust-code-raider-widget/releases/tag/v1.0.0) page:
+Grab the standalone build from the [Releases](https://github.com/Welsonnot/rust-code-raider-widget/releases) page:
 
-**[Release Rust Code Raider v1.0.0](https://github.com/Welsonnot/rust-code-raider-widget/releases/tag/v1.0.0)**
+**[Release Rust Code Raider](https://github.com/Welsonnot/rust-code-raider-widget/releases)**
 
 1. Download and extract the .zip anywhere on your PC.
 2. Run Rust Code Raider.exe.
@@ -42,7 +42,7 @@ Grab the standalone build from the [Releases](https://github.com/Welsonnot/rust-
 - **Audio Feedback**: Subtle click sound on next/prev and a chime when marked solved, so you can focus on typing without staring at the widget. Can be muted at any time.
 - **Multi-Base Tracking**: Save your spot across multiple targets (Base 1, Base 2, etc.). Automatically remembers where you left off between restarts.
 - **Ordered Code List**: Comes pre-loaded with the top 10,000 most common Rust code lock combinations ordered by probability.
-- **Customizable**: Dark / Light themes, widget scaling from 100% to 200%, custom keybinds, and screen snap presets (Top-Right, Top-Left, Bottom-Right, etc.).
+- **Customizable**: Light / Dark themes, adjustable background opacity (0%–100%), widget scaling (100%–150%), custom keybinds, and screen snap presets (Top-Right, Top-Left, Bottom-Right, etc.).
 
 ---
 

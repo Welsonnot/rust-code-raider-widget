@@ -96,9 +96,10 @@ void main() {
     expect(find.text('Appearance'), findsOneWidget);
     expect(find.text('Dark'), findsOneWidget);
     expect(find.text('Light'), findsOneWidget);
+    expect(find.text('Background Opacity'), findsOneWidget);
     expect(find.text('Sound Effects'), findsOneWidget);
     expect(find.text('Widget Size'), findsOneWidget);
-    expect(find.text('100%'), findsOneWidget);
+    expect(find.text('100%'), findsWidgets);
     expect(find.text('125%'), findsOneWidget);
     expect(find.text('150%'), findsOneWidget);
     expect(find.text('Custom Keybinds'), findsOneWidget);
@@ -255,24 +256,24 @@ void main() {
   testWidgets('Theme toggle in HUD switches between Dark Mode and Light Mode', (WidgetTester tester) async {
     await tester.pumpWidget(const MinimalRaidApp());
 
-    // Initially in Dark Mode: sun icon is shown to allow switching to Light Mode
-    expect(find.byIcon(Icons.light_mode_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.dark_mode_rounded), findsNothing);
-
-    // Tap theme toggle to switch to Light Mode
-    await tester.tap(find.byIcon(Icons.light_mode_rounded));
-    await tester.pumpAndSettle();
-
-    // Now in Light Mode: moon icon is shown to allow switching back to Dark Mode
+    // Initially in Light Mode (#E8E8E8 Stone Gray): moon icon is shown to allow switching to Dark Mode
     expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget);
     expect(find.byIcon(Icons.light_mode_rounded), findsNothing);
 
-    // Tap theme toggle again to switch back to Dark Mode
+    // Tap theme toggle to switch to Dark Mode
     await tester.tap(find.byIcon(Icons.dark_mode_rounded));
     await tester.pumpAndSettle();
 
+    // Now in Dark Mode (#000000 Pitch Black): sun icon is shown to allow switching back to Light Mode
     expect(find.byIcon(Icons.light_mode_rounded), findsOneWidget);
     expect(find.byIcon(Icons.dark_mode_rounded), findsNothing);
+
+    // Tap theme toggle again to switch back to Light Mode
+    await tester.tap(find.byIcon(Icons.light_mode_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.dark_mode_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.light_mode_rounded), findsNothing);
   });
 
   testWidgets('Mute toggle in HUD and Settings dialog toggles sound muted state', (WidgetTester tester) async {

@@ -2,13 +2,12 @@
 // Licensed under the PolyForm Noncommercial License 1.0.0.
 // See LICENSE in the project root for full license terms.
 
-import 'dart:io' show Platform, Process;
-import 'package:flutter/cupertino.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import '../models/keybind_config.dart';
 import '../models/session_manager.dart';
+import '../theme/app_theme.dart';
 
 const String privacyNoticeText =
     'This app only listens for designated hotkeys (F7/F8) to change overlay numbers. It does not record keystrokes, does not store data, and has no network connectivity.';
@@ -23,111 +22,22 @@ class SettingsDialog extends StatelessWidget {
     required this.isDark,
   });
 
-  static Future<void> show(
+  static String _resolvePrivacyNotice() {
+    if (!verifyKeydriverIntegrity()) {
+      return '';
+    }
+    return privacyNoticeText;
+  }
+
+  static void show(
     BuildContext context, {
     required SessionManager sessionManager,
     required bool isDark,
   }) {
-    return showDialog(
+    showDialog(
       context: context,
-      builder: (ctx) => SettingsDialog(
-        sessionManager: sessionManager,
-        isDark: isDark,
-      ),
-    );
-  }
-
-  static Future<void> showPrivacyModal(BuildContext context, {required bool isDark}) {
-    final bg = isDark ? const Color(0xFF141418) : Colors.white;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final textMuted = isDark ? const Color(0xFF7A7A80) : const Color(0xFF8E8E93);
-    final border = isDark ? const Color(0xFF26262C) : const Color(0xFFE5E5EA);
-
-    return showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: bg,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: BorderSide(color: border, width: 1),
-        ),
-        child: Container(
-          width: 300,
-          constraints: const BoxConstraints(maxHeight: 196),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.shield_outlined, size: 16, color: Color(0xFF007AFF)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Privacy Notice',
-                        style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                          color: textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: Icon(Icons.close_rounded, size: 18, color: textMuted),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF007AFF).withValues(alpha: isDark ? 0.12 : 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: const Color(0xFF007AFF).withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: Text(
-                      privacyNoticeText,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
-                        color: textPrimary,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: isDark ? Colors.white : Colors.black,
-                    foregroundColor: isDark ? Colors.black : Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: Text('Understood', style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) =>
+          SettingsDialog(sessionManager: sessionManager, isDark: isDark),
     );
   }
 
@@ -136,782 +46,554 @@ class SettingsDialog extends StatelessWidget {
     return ListenableBuilder(
       listenable: sessionManager,
       builder: (context, _) {
-        final isDark = sessionManager.isDark;
-        final bg = isDark ? const Color(0xFF141418) : Colors.white;
-        final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-        final textMuted = isDark ? const Color(0xFF7A7A80) : const Color(0xFF8E8E93);
-        final border = isDark ? const Color(0xFF26262C) : const Color(0xFFE5E5EA);
-        final windowHeight = MediaQuery.of(context).size.height;
-        final windowWidth = MediaQuery.of(context).size.width;
-
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final isHotkeysOn = sessionManager.isHotkeysEnabled;
+            final isDark = sessionManager.isDark;
+            final bg = AppTheme.bg(isDark);
+            final textPrimary = AppTheme.textPrimary(isDark);
+            final textSecondary = AppTheme.textSecondary(isDark);
+            final textMuted = AppTheme.textMuted(isDark);
+            final controlBg = AppTheme.controlBg(isDark);
 
-        return Dialog(
-          backgroundColor: bg,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: border, width: 1),
-          ),
-          child: Container(
-            width: (windowWidth - 16).clamp(296.0, 440.0),
-            constraints: BoxConstraints(
-              maxHeight: (windowHeight - 16).clamp(196.0, 560.0),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header (Title + Close)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            final currentScale = sessionManager.hudScale;
+            final currentOpacity = sessionManager.bgOpacity;
+            final currentPos = sessionManager.hudPosition;
+            final resolvedPrivacyNotice = _resolvePrivacyNotice();
+
+            return Dialog(
+              backgroundColor: bg,
+              insetPadding: EdgeInsets.zero,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.zero,
+              ),
+              child: SizedBox(
+                width: 320,
+                height: 220,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(5),
-                          child: Image.asset(
-                            'assets/images/app_logo_small.png',
-                            width: 18,
-                            height: 18,
-                            fit: BoxFit.cover,
+                    // Editorial Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 12, 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Settings',
+                            style: AppTheme.sans(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              color: textPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 7),
-                        Text(
-                          'Settings',
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
-                            color: textPrimary,
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: textMuted,
+                            ),
+                            onPressed: () => Navigator.pop(context),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: Icon(Icons.close_rounded, size: 18, color: textMuted),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
 
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Appearance / Theme Card
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
+                    // Scrollable Preferences Body (No full-bleed Dividers)
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // 1. Appearance (12h | 24h Segmented Capsule Track)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildSectionLabel('Appearance', textPrimary),
+                                Container(
+                                  padding: const EdgeInsets.all(2.5),
+                                  decoration: BoxDecoration(
+                                    color: controlBg,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(
-                                        isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                                        size: 13,
-                                        color: textPrimary,
+                                      _buildThemeButton(
+                                        'Light',
+                                        false,
+                                        isDark,
+                                        textPrimary,
+                                        setModalState,
                                       ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'Appearance',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: textPrimary,
-                                        ),
+                                      _buildThemeButton(
+                                        'Dark',
+                                        true,
+                                        isDark,
+                                        textPrimary,
+                                        setModalState,
                                       ),
                                     ],
                                   ),
-                                  Text(
-                                    isDark ? 'Dark Mode' : 'Light Mode',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: const Color(0xFF007AFF),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 7),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildThemeButton(
-                                      'Dark',
-                                      Icons.dark_mode_rounded,
-                                      true,
-                                      isDark,
-                                      textPrimary,
-                                      setModalState,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: _buildThemeButton(
-                                      'Light',
-                                      Icons.light_mode_rounded,
-                                      false,
-                                      isDark,
-                                      textPrimary,
-                                      setModalState,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
+                                ),
+                              ],
+                            ),
 
-                        // Sound Effects / Audio Card
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        sessionManager.isSoundMuted
-                                            ? Icons.volume_off_rounded
-                                            : Icons.volume_up_rounded,
-                                        size: 13,
-                                        color: textPrimary,
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'Sound Effects',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: textPrimary,
-                                        ),
-                                      ),
-                                    ],
+                            const SizedBox(height: 12),
+
+                            // 1b. Background Opacity
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildSectionLabel(
+                                  'Background Opacity',
+                                  textPrimary,
+                                ),
+                                Text(
+                                  '${(currentOpacity * 100).round()}%',
+                                  style: AppTheme.mono(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: textMuted,
                                   ),
-                                  Transform.scale(
-                                    scale: 0.8,
-                                    child: CupertinoSwitch(
-                                      value: !sessionManager.isSoundMuted,
-                                      activeTrackColor: const Color(0xFF34C759),
-                                      onChanged: (val) {
-                                        sessionManager.setIsSoundMuted(!val);
-                                        setModalState(() {});
-                                      },
-                                    ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 5),
+                            SizedBox(
+                              height: 20,
+                              child: SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  trackHeight: 4,
+                                  activeTrackColor: AppTheme.activePillBg(
+                                    isDark,
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                sessionManager.isSoundMuted
-                                    ? 'Sound muted (silent mode)'
-                                    : 'Next/Back audio & Solved chime active',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w400,
-                                  color: textMuted,
+                                  inactiveTrackColor: controlBg,
+                                  thumbColor: AppTheme.activePillBg(isDark),
+                                  overlayShape: SliderComponentShape.noOverlay,
+                                  thumbShape: const RoundSliderThumbShape(
+                                    enabledThumbRadius: 6,
+                                  ),
+                                ),
+                                child: Slider(
+                                  value: currentOpacity,
+                                  min: 0.0,
+                                  max: 1.0,
+                                  onChanged: (val) {
+                                    sessionManager.setBgOpacity(val);
+                                    setModalState(() {});
+                                  },
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
 
-                        // 1. Widget Size / Scale Card
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
+                            const SizedBox(height: 12),
+
+                            // 2. Sound Effects
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Icon(
-                                        Icons.aspect_ratio_rounded,
-                                        size: 13,
-                                        color: textPrimary,
-                                      ),
-                                      const SizedBox(width: 5),
                                       Text(
-                                        'Widget Size',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                        'Sound Effects',
+                                        style: AppTheme.sans(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w500,
                                           color: textPrimary,
+                                        ),
+                                      ),
+                                      Text(
+                                        sessionManager.isSoundMuted
+                                            ? 'Muted'
+                                            : 'Click on hotkey press',
+                                        style: AppTheme.sans(
+                                          fontSize: 10,
+                                          color: textMuted,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  Text(
-                                    '${(sessionManager.hudScale * 100).round()}% (${(320 * sessionManager.hudScale).round()}×${(220 * sessionManager.hudScale).round()})',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: textMuted,
-                                    ),
-                                  ),
-                                ],
+                                ),
+                                _buildStadiumToggle(
+                                  value: !sessionManager.isSoundMuted,
+                                  isDark: isDark,
+                                  onChanged: (enabled) {
+                                    sessionManager.setIsSoundMuted(!enabled);
+                                    setModalState(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // 3. Widget Size (12h | 24h Segmented Capsule Track)
+                            _buildSectionLabel('Widget Size', textPrimary),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                color: controlBg,
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                              const SizedBox(height: 6),
-                              Row(
+                              child: Row(
                                 children: [
-                                  InkWell(
-                                    onTap: () {
-                                      final newScale = (sessionManager.hudScale - 0.25).clamp(1.0, 2.5);
-                                      sessionManager.setHudScale(newScale);
-                                      setModalState(() {});
-                                    },
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4.5),
-                                      decoration: BoxDecoration(
-                                        color: isDark ? const Color(0xFF262630) : const Color(0xFFE4E4E8),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: isDark ? const Color(0xFF343440) : const Color(0xFFD4D4D8),
-                                          width: 0.6,
-                                        ),
-                                      ),
-                                      child: Icon(Icons.remove_rounded, size: 12, color: textPrimary),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
                                   _buildScaleButton(
                                     '100%',
                                     1.0,
-                                    sessionManager.hudScale,
+                                    currentScale,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
-                                  const SizedBox(width: 4),
                                   _buildScaleButton(
                                     '125%',
                                     1.25,
-                                    sessionManager.hudScale,
+                                    currentScale,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
-                                  const SizedBox(width: 4),
                                   _buildScaleButton(
                                     '150%',
                                     1.5,
-                                    sessionManager.hudScale,
+                                    currentScale,
                                     isDark,
                                     textPrimary,
                                     setModalState,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  _buildScaleButton(
-                                    '175%',
-                                    1.75,
-                                    sessionManager.hudScale,
-                                    isDark,
-                                    textPrimary,
-                                    setModalState,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  _buildScaleButton(
-                                    '200%',
-                                    2.0,
-                                    sessionManager.hudScale,
-                                    isDark,
-                                    textPrimary,
-                                    setModalState,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  InkWell(
-                                    onTap: () {
-                                      final newScale = (sessionManager.hudScale + 0.25).clamp(1.0, 2.5);
-                                      sessionManager.setHudScale(newScale);
-                                      setModalState(() {});
-                                    },
-                                    borderRadius: BorderRadius.circular(6),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4.5),
-                                      decoration: BoxDecoration(
-                                        color: isDark ? const Color(0xFF262630) : const Color(0xFFE4E4E8),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                          color: isDark ? const Color(0xFF343440) : const Color(0xFFD4D4D8),
-                                          width: 0.6,
-                                        ),
-                                      ),
-                                      child: Icon(Icons.add_rounded, size: 12, color: textPrimary),
-                                    ),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
 
-                        // 2. Custom Keybinds Card
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.keyboard_outlined,
-                                        size: 13,
-                                        color: textPrimary,
-                                      ),
-                                      const SizedBox(width: 5),
-                                      Text(
-                                        'Custom Keybinds',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: textPrimary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  InkWell(
-                                    onTap: () {
-                                      sessionManager.resetKeybindsToDefault();
-                                      setModalState(() {});
-                                    },
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                      child: Text(
-                                        'Reset',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: const Color(0xFF007AFF),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              _buildKeybindRow(
-                                title: 'Next Code',
-                                keyLabel: sessionManager.keyNext,
-                                onSelected: (k) {
-                                  sessionManager.setKeyNext(k);
-                                  setModalState(() {});
-                                },
-                                isDark: isDark,
-                                textPrimary: textPrimary,
-                                textMuted: textMuted,
-                              ),
-                              _buildKeybindRow(
-                                title: 'Previous Code',
-                                keyLabel: sessionManager.keyPrev,
-                                onSelected: (k) {
-                                  sessionManager.setKeyPrev(k);
-                                  setModalState(() {});
-                                },
-                                isDark: isDark,
-                                textPrimary: textPrimary,
-                                textMuted: textMuted,
-                              ),
-                              _buildKeybindRow(
-                                title: 'Mark Solved',
-                                keyLabel: sessionManager.keySolved,
-                                onSelected: (k) {
-                                  sessionManager.setKeySolved(k);
-                                  setModalState(() {});
-                                },
-                                isDark: isDark,
-                                textPrimary: textPrimary,
-                                textMuted: textMuted,
-                              ),
-                            ],
-                          ),
-                        ),
+                            const SizedBox(height: 12),
 
-                        // 3. Screen Placement Card
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.dashboard_customize_outlined,
-                                    size: 13,
-                                    color: textPrimary,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'Screen Placement',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                ],
+                            // 4. Custom Keybinds
+                            _buildSectionLabel('Custom Keybinds', textPrimary),
+                            const SizedBox(height: 5),
+                            _buildKeybindRow(
+                              title: 'Next Code',
+                              keyLabel: sessionManager.keyNext,
+                              onSelected: (val) {
+                                sessionManager.setKeyNext(val);
+                                setModalState(() {});
+                              },
+                              isDark: isDark,
+                              textPrimary: textPrimary,
+                              textMuted: textMuted,
+                            ),
+                            _buildKeybindRow(
+                              title: 'Previous Code',
+                              keyLabel: sessionManager.keyPrev,
+                              onSelected: (val) {
+                                sessionManager.setKeyPrev(val);
+                                setModalState(() {});
+                              },
+                              isDark: isDark,
+                              textPrimary: textPrimary,
+                              textMuted: textMuted,
+                            ),
+                            _buildKeybindRow(
+                              title: 'Mark Solved',
+                              keyLabel: sessionManager.keySolved,
+                              onSelected: (val) {
+                                sessionManager.setKeySolved(val);
+                                setModalState(() {});
+                              },
+                              isDark: isDark,
+                              textPrimary: textPrimary,
+                              textMuted: textMuted,
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // 5. Screen Placement
+                            _buildSectionLabel('Screen Placement', textPrimary),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                color: controlBg,
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                              const SizedBox(height: 6),
-                              // Top Row: Top Left, Top Middle, Top Right
-                              Row(
+                              child: Row(
                                 children: [
                                   _buildPlacementButton(
                                     'Top Left',
                                     'topLeft',
-                                    sessionManager.hudPosition,
+                                    currentPos,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
-                                  const SizedBox(width: 4),
                                   _buildPlacementButton(
                                     'Top Middle',
                                     'topCenter',
-                                    sessionManager.hudPosition,
+                                    currentPos,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
-                                  const SizedBox(width: 4),
                                   _buildPlacementButton(
                                     'Top Right',
                                     'topRight',
-                                    sessionManager.hudPosition,
+                                    currentPos,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
-                              // Bottom Row: Bottom Left, Bottom Right
-                              Row(
+                            ),
+                            const SizedBox(height: 5),
+                            Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                color: controlBg,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
                                 children: [
                                   _buildPlacementButton(
                                     'Bottom Left',
                                     'bottomLeft',
-                                    sessionManager.hudPosition,
+                                    currentPos,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
-                                  const SizedBox(width: 4),
                                   _buildPlacementButton(
                                     'Bottom Right',
                                     'bottomRight',
-                                    sessionManager.hudPosition,
+                                    currentPos,
                                     isDark,
                                     textPrimary,
                                     setModalState,
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                        ),
-
-                        // 4. Global Hotkeys Toggle Switch
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'Global Hotkeys',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 1),
-                                        Text(
-                                          '${sessionManager.keyNext} (Next) / ${sessionManager.keyPrev} (Prev) / ${sessionManager.keySolved} (Solve)',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontSize: 10.5,
-                                            fontWeight: FontWeight.w400,
-                                            color: textMuted,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Transform.scale(
-                                    scale: 0.85,
-                                    child: CupertinoSwitch(
-                                      value: isHotkeysOn,
-                                      activeTrackColor: const Color(0xFF34C759),
-                                      onChanged: (val) {
-                                        sessionManager.setHotkeysEnabled(val);
-                                        setModalState(() {});
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: isHotkeysOn
-                                          ? const Color(0xFF34C759)
-                                          : const Color(0xFFFF9500),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    isHotkeysOn ? 'Hotkeys Active' : 'Hotkeys Inactive',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: isHotkeysOn
-                                          ? const Color(0xFF34C759)
-                                          : const Color(0xFFFF9500),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // 5. Credits (Made by welsonnot)
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF1D1D24) : const Color(0xFFF2F2F5),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isDark ? const Color(0xFF26262C) : const Color(0xFFE5E5EA),
-                              width: 0.8,
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.favorite_rounded,
-                                    size: 13,
-                                    color: const Color(0xFF007AFF),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'Credits',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF007AFF).withValues(alpha: 0.14),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      'PolyForm 1.0.0',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.w600,
-                                        color: const Color(0xFF007AFF),
+
+                            const SizedBox(height: 12),
+
+                            // 6. Global Hotkeys
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Global Hotkeys',
+                                        style: AppTheme.sans(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: textPrimary,
+                                        ),
                                       ),
-                                    ),
+                                      Text(
+                                        sessionManager.isHotkeysEnabled
+                                            ? 'Listening (${sessionManager.keyPrev} / ${sessionManager.keyNext} / ${sessionManager.keySolved})'
+                                            : 'Paused (${sessionManager.keyPrev} / ${sessionManager.keyNext} / ${sessionManager.keySolved} free)',
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                        style: AppTheme.sans(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w400,
+                                          color: textMuted,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 7),
-                              _buildLinkTile(
-                                icon: Icons.code_rounded,
-                                label: 'github.com/Welsonnot',
-                                url: 'https://github.com/Welsonnot',
-                                isDark: isDark,
-                                textPrimary: textPrimary,
-                                textMuted: textMuted,
-                              ),
-                              const SizedBox(height: 5),
-                              _buildLinkTile(
-                                icon: Icons.language_rounded,
-                                label: 'minristudio.com',
-                                url: 'https://minristudio.com',
-                                isDark: isDark,
-                                textPrimary: textPrimary,
-                                textMuted: textMuted,
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // 6. Privacy Notice Banner
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF007AFF).withValues(alpha: isDark ? 0.12 : 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(0xFF007AFF).withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(Icons.shield_outlined, size: 13, color: Color(0xFF007AFF)),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    'Privacy Notice',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF007AFF),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                privacyNoticeText,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 10.5,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w400,
-                                  color: textPrimary.withValues(alpha: 0.85),
                                 ),
+                                const SizedBox(width: 6),
+                                _buildStadiumToggle(
+                                  value: sessionManager.isHotkeysEnabled,
+                                  isDark: isDark,
+                                  onChanged: (val) {
+                                    sessionManager.setHotkeysEnabled(val);
+                                    setModalState(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 14),
+
+                            // 7. Credits & Links
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _buildSectionLabel('Credits', textPrimary),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'PolyForm Noncommercial 1.0.0',
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: AppTheme.sans(
+                                      fontSize: 9.5,
+                                      fontWeight: FontWeight.w400,
+                                      color: textMuted,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildLinkTile(
+                                    label: 'github.com/Welsonnot',
+                                    url: 'https://github.com/Welsonnot',
+                                    isDark: isDark,
+                                    textPrimary: textPrimary,
+                                    textMuted: textMuted,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: _buildLinkTile(
+                                    label: 'minristudio.com',
+                                    url: 'https://minristudio.com',
+                                    isDark: isDark,
+                                    textPrimary: textPrimary,
+                                    textMuted: textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // 8. Privacy Notice
+                            Text(
+                              'Privacy Notice',
+                              style: AppTheme.sans(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                                color: textSecondary,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              resolvedPrivacyNotice,
+                              style: AppTheme.sans(
+                                fontSize: 10,
+                                height: 1.35,
+                                fontWeight: FontWeight.w400,
+                                color: textMuted,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
-      },
+  }
+
+  Widget _buildSectionLabel(String title, Color textPrimary) {
+    return Text(
+      title,
+      style: AppTheme.sans(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w500,
+        color: textPrimary,
+      ),
+    );
+  }
+
+  /// Stadium capsule toggle matching the reference "12h | 24h" monochrome switch
+  Widget _buildStadiumToggle({
+    required bool value,
+    required bool isDark,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final trackColor = value
+        ? AppTheme.activePillBg(isDark)
+        : AppTheme.controlBg(isDark);
+    final thumbColor = value
+        ? AppTheme.activePillText(isDark)
+        : AppTheme.textMuted(isDark);
+
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        width: 34,
+        height: 20,
+        padding: const EdgeInsets.all(2.5),
+        decoration: BoxDecoration(
+          color: trackColor,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 15,
+            height: 15,
+            decoration: BoxDecoration(
+              color: thumbColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildThemeButton(
     String label,
-    IconData icon,
     bool buttonIsDark,
     bool currentIsDark,
     Color textPrimary,
     void Function(void Function()) setModalState,
   ) {
     final isSelected = buttonIsDark == currentIsDark;
-    final activeBg = const Color(0xFF007AFF).withValues(alpha: currentIsDark ? 0.28 : 0.16);
-    const activeBorder = Color(0xFF007AFF);
-    final inactiveBg = currentIsDark ? const Color(0xFF262630) : const Color(0xFFE4E4E8);
-    final inactiveBorder = currentIsDark ? const Color(0xFF343440) : const Color(0xFFD4D4D8);
+    final textMuted = AppTheme.textMuted(currentIsDark);
 
     return InkWell(
       onTap: () {
         sessionManager.setIsDark(buttonIsDark);
         setModalState(() {});
       },
-      borderRadius: BorderRadius.circular(6),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 5.5),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? activeBg : inactiveBg,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isSelected ? activeBorder : inactiveBorder,
-            width: isSelected ? 1.0 : 0.6,
-          ),
+          color: isSelected
+              ? AppTheme.activePillBg(currentIsDark)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 13,
-              color: isSelected ? const Color(0xFF007AFF) : (currentIsDark ? const Color(0xFF8E8E93) : const Color(0xFF636366)),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? textPrimary : (currentIsDark ? const Color(0xFF8E8E93) : const Color(0xFF636366)),
-              ),
-            ),
-          ],
+        child: Text(
+          label,
+          style: AppTheme.sans(
+            fontSize: 10.5,
+            fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+            color: isSelected
+                ? AppTheme.activePillText(currentIsDark)
+                : textMuted,
+          ),
         ),
       ),
     );
@@ -926,10 +608,7 @@ class SettingsDialog extends StatelessWidget {
     void Function(void Function()) setModalState,
   ) {
     final isSelected = (currentScale - scaleValue).abs() < 0.05;
-    final activeBg = const Color(0xFF007AFF).withValues(alpha: isDark ? 0.28 : 0.16);
-    const activeBorder = Color(0xFF007AFF);
-    final inactiveBg = isDark ? const Color(0xFF262630) : const Color(0xFFE4E4E8);
-    final inactiveBorder = isDark ? const Color(0xFF343440) : const Color(0xFFD4D4D8);
+    final textMuted = AppTheme.textMuted(isDark);
 
     return Expanded(
       child: InkWell(
@@ -937,25 +616,23 @@ class SettingsDialog extends StatelessWidget {
           sessionManager.setHudScale(scaleValue);
           setModalState(() {});
         },
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(999),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 4.5),
           decoration: BoxDecoration(
-            color: isSelected ? activeBg : inactiveBg,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isSelected ? activeBorder : inactiveBorder,
-              width: isSelected ? 1.0 : 0.6,
-            ),
+            color: isSelected
+                ? AppTheme.activePillBg(isDark)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
           ),
           child: Center(
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 9.5,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? const Color(0xFF007AFF) : textPrimary,
+              style: AppTheme.mono(
+                fontSize: 10.5,
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+                color: isSelected ? AppTheme.activePillText(isDark) : textMuted,
               ),
             ),
           ),
@@ -972,6 +649,7 @@ class SettingsDialog extends StatelessWidget {
     required Color textPrimary,
     required Color textMuted,
   }) {
+    final border = AppTheme.border(isDark);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.5),
       child: Row(
@@ -979,74 +657,67 @@ class SettingsDialog extends StatelessWidget {
         children: [
           Text(
             title,
-            style: GoogleFonts.plusJakartaSans(
+            style: AppTheme.sans(
               fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: textPrimary,
+              fontWeight: FontWeight.w400,
+              color: textMuted,
             ),
           ),
           PopupMenuButton<String>(
             tooltip: 'Select key for $title',
             onSelected: onSelected,
             initialValue: keyLabel,
-            color: isDark ? const Color(0xFF1E1E26) : Colors.white,
+            color: AppTheme.surface(isDark),
+            elevation: 4,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(
-                color: isDark ? const Color(0xFF33333F) : const Color(0xFFD1D1D8),
-              ),
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: border, width: 1),
             ),
             itemBuilder: (ctx) {
               return kAvailableKeybinds.map((option) {
                 final isCur = option.label == keyLabel;
                 return PopupMenuItem<String>(
                   value: option.label,
-                  height: 30,
+                  height: 28,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         option.label,
-                        style: GoogleFonts.jetBrainsMono(
+                        style: AppTheme.sans(
                           fontSize: 11,
-                          fontWeight: isCur ? FontWeight.w700 : FontWeight.w500,
-                          color: isCur
-                              ? const Color(0xFF007AFF)
-                              : (isDark ? Colors.white : Colors.black87),
+                          fontWeight: isCur ? FontWeight.w600 : FontWeight.w400,
+                          color: isCur ? textPrimary : textMuted,
                         ),
                       ),
                       if (isCur)
-                        const Icon(Icons.check_rounded, size: 14, color: Color(0xFF007AFF)),
+                        Icon(Icons.check_rounded, size: 13, color: textPrimary),
                     ],
                   ),
                 );
               }).toList();
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3.0),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF282834) : const Color(0xFFE2E2E8),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: isDark ? const Color(0xFF3A3A4A) : const Color(0xFFC8C8D0),
-                  width: 0.8,
-                ),
+                color: AppTheme.controlBg(isDark),
+                borderRadius: BorderRadius.circular(999),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     keyLabel,
-                    style: GoogleFonts.jetBrainsMono(
+                    style: AppTheme.sans(
                       fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                       color: textPrimary,
                     ),
                   ),
                   const SizedBox(width: 3),
                   Icon(
-                    Icons.arrow_drop_down_rounded,
-                    size: 14,
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 13,
                     color: textMuted,
                   ),
                 ],
@@ -1067,10 +738,7 @@ class SettingsDialog extends StatelessWidget {
     void Function(void Function()) setModalState,
   ) {
     final isSelected = value == currentValue;
-    final activeBg = const Color(0xFF007AFF).withValues(alpha: isDark ? 0.28 : 0.16);
-    const activeBorder = Color(0xFF007AFF);
-    final inactiveBg = isDark ? const Color(0xFF262630) : const Color(0xFFE4E4E8);
-    final inactiveBorder = isDark ? const Color(0xFF343440) : const Color(0xFFD4D4D8);
+    final textMuted = AppTheme.textMuted(isDark);
 
     return Expanded(
       child: InkWell(
@@ -1078,25 +746,23 @@ class SettingsDialog extends StatelessWidget {
           sessionManager.setHudPosition(value);
           setModalState(() {});
         },
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(999),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 4.5),
           decoration: BoxDecoration(
-            color: isSelected ? activeBg : inactiveBg,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isSelected ? activeBorder : inactiveBorder,
-              width: isSelected ? 1.0 : 0.6,
-            ),
+            color: isSelected
+                ? AppTheme.activePillBg(isDark)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
           ),
           child: Center(
             child: Text(
               label,
               textAlign: TextAlign.center,
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 9.5,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected ? const Color(0xFF007AFF) : textPrimary,
+              style: AppTheme.sans(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+                color: isSelected ? AppTheme.activePillText(isDark) : textMuted,
               ),
             ),
           ),
@@ -1120,7 +786,6 @@ class SettingsDialog extends StatelessWidget {
   }
 
   Widget _buildLinkTile({
-    required IconData icon,
     required String label,
     required String url,
     required bool isDark,
@@ -1131,36 +796,27 @@ class SettingsDialog extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () => _launchUrl(url),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(999),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 4.5, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF262630) : const Color(0xFFE4E4E8),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isDark ? const Color(0xFF343440) : const Color(0xFFD4D4D8),
-              width: 0.6,
-            ),
+            color: AppTheme.controlBg(isDark),
+            borderRadius: BorderRadius.circular(999),
           ),
           child: Row(
             children: [
-              Icon(icon, size: 12, color: const Color(0xFF007AFF)),
-              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   label,
-                  style: GoogleFonts.plusJakartaSans(
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.sans(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     color: textPrimary,
                   ),
                 ),
               ),
-              Icon(
-                Icons.open_in_new_rounded,
-                size: 10,
-                color: textMuted,
-              ),
+              Icon(Icons.arrow_outward_rounded, size: 11, color: textMuted),
             ],
           ),
         ),

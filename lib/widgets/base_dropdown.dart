@@ -3,9 +3,9 @@
 // See LICENSE in the project root for full license terms.
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/base_session.dart';
 import '../models/session_manager.dart';
+import '../theme/app_theme.dart';
 import 'settings_dialog.dart';
 
 class BaseDropdown extends StatelessWidget {
@@ -20,40 +20,39 @@ class BaseDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF111111);
-    final textMuted = isDark ? const Color(0xFF7A7A80) : const Color(0xFF8E8E93);
+    final active = sessionManager.activeSession;
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final textMuted = AppTheme.textMuted(isDark);
 
     return GestureDetector(
-      onSecondaryTapDown: (details) => _showContextMenu(context, details.globalPosition),
+      onSecondaryTapDown: (details) =>
+          _showQuickContextMenu(context, details.globalPosition),
       child: InkWell(
         onTap: () => _showSessionSheet(context),
-        onSecondaryTap: () => _showRenameDialog(context),
+        onLongPress: () => _showRenameDialog(context),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2.0),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 95),
-                  child: Text(
-                    sessionManager.activeSession.name,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: -0.3,
-                      color: textPrimary,
-                    ),
+                child: Text(
+                  active.name,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: AppTheme.sans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.25,
+                    color: textPrimary,
                   ),
                 ),
               ),
               const SizedBox(width: 2),
               Icon(
                 Icons.keyboard_arrow_down_rounded,
-                size: 16,
+                size: 14,
                 color: textMuted,
               ),
             ],
@@ -63,79 +62,65 @@ class BaseDropdown extends StatelessWidget {
     );
   }
 
-  void _showContextMenu(BuildContext context, Offset globalPosition) async {
-    final RenderBox? overlay = Overlay.of(context).context.findRenderObject() as RenderBox?;
-    if (overlay == null) return;
+  Future<void> _showQuickContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+  ) async {
+    final bg = AppTheme.surface(isDark);
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final border = AppTheme.border(isDark);
 
-    final bg = isDark ? const Color(0xFF18181D) : Colors.white;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final border = isDark ? const Color(0xFF2C2C34) : const Color(0xFFE5E5EA);
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final position = RelativeRect.fromRect(
+      Rect.fromPoints(globalPosition, globalPosition),
+      Offset.zero & (overlay?.size ?? const Size(320, 220)),
+    );
 
     final selected = await showMenu<String>(
       context: context,
+      position: position,
       color: bg,
-      elevation: 8,
+      elevation: 4,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         side: BorderSide(color: border, width: 1),
-      ),
-      position: RelativeRect.fromRect(
-        Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
-        Offset.zero & overlay.size,
       ),
       items: [
         PopupMenuItem<String>(
           value: 'modify',
-          height: 34,
-          child: Row(
-            children: [
-              Icon(Icons.edit_rounded, size: 14, color: textPrimary),
-              const SizedBox(width: 8),
-              Text(
-                'Modify Base Name',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
-                ),
-              ),
-            ],
+          height: 30,
+          child: Text(
+            'Modify Base Name',
+            style: AppTheme.sans(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: textPrimary,
+            ),
           ),
         ),
         PopupMenuItem<String>(
           value: 'new',
-          height: 34,
-          child: Row(
-            children: [
-              Icon(Icons.add_rounded, size: 14, color: textPrimary),
-              const SizedBox(width: 8),
-              Text(
-                'New Base Session',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: textPrimary,
-                ),
-              ),
-            ],
+          height: 30,
+          child: Text(
+            'New Base Session',
+            style: AppTheme.sans(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: textPrimary,
+            ),
           ),
         ),
         PopupMenuItem<String>(
           value: 'all',
-          height: 34,
-          child: Row(
-            children: [
-              Icon(Icons.list_rounded, size: 14, color: textPrimary),
-              const SizedBox(width: 8),
-              Text(
-                'All Base Sessions',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: textPrimary,
-                ),
-              ),
-            ],
+          height: 30,
+          child: Text(
+            'All Base Sessions',
+            style: AppTheme.sans(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w500,
+              color: textPrimary,
+            ),
           ),
         ),
       ],
@@ -161,9 +146,10 @@ class BaseDropdown extends StatelessWidget {
       baseOffset: 0,
       extentOffset: controller.text.length,
     );
-    final bg = isDark ? const Color(0xFF141418) : Colors.white;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final border = isDark ? const Color(0xFF26262C) : const Color(0xFFE5E5EA);
+    final bg = AppTheme.bg(isDark);
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final textMuted = AppTheme.textMuted(isDark);
+    final border = AppTheme.border(isDark);
 
     showDialog(
       context: context,
@@ -171,32 +157,41 @@ class BaseDropdown extends StatelessWidget {
         return AlertDialog(
           backgroundColor: bg,
           insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 6,
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: border),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: border, width: 1),
           ),
           title: Text(
             'Modify Base Name',
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+            style: AppTheme.sans(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
               color: textPrimary,
             ),
           ),
           content: TextField(
             controller: controller,
             autofocus: true,
-            style: GoogleFonts.plusJakartaSans(fontSize: 13, color: textPrimary),
+            style: AppTheme.sans(fontSize: 12, color: textPrimary),
             decoration: InputDecoration(
               hintText: 'Enter base name...',
-              hintStyle: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey),
+              hintStyle: AppTheme.sans(fontSize: 11.5, color: textMuted),
               filled: true,
-              fillColor: isDark ? const Color(0xFF22222A) : const Color(0xFFF2F2F5),
+              fillColor: AppTheme.controlBg(isDark),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
             ),
             onSubmitted: (val) {
               final trimmed = val.trim();
@@ -208,17 +203,34 @@ class BaseDropdown extends StatelessWidget {
           ),
           actions: [
             TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 'Cancel',
-                style: GoogleFonts.plusJakartaSans(color: Colors.grey),
+                style: AppTheme.sans(fontSize: 11.5, color: textMuted),
               ),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: isDark ? Colors.white : Colors.black,
-                foregroundColor: isDark ? Colors.black : Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                backgroundColor: AppTheme.activePillBg(isDark),
+                foregroundColor: AppTheme.activePillText(isDark),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               onPressed: () {
                 final trimmed = controller.text.trim();
@@ -229,7 +241,10 @@ class BaseDropdown extends StatelessWidget {
               },
               child: Text(
                 'Save',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+                style: AppTheme.sans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -239,10 +254,9 @@ class BaseDropdown extends StatelessWidget {
   }
 
   void _showSessionSheet(BuildContext context) {
-    final bg = isDark ? const Color(0xFF141418) : Colors.white;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final textMuted = isDark ? const Color(0xFF7A7A80) : const Color(0xFF8E8E93);
-    final border = isDark ? const Color(0xFF26262C) : const Color(0xFFE5E5EA);
+    final bg = AppTheme.bg(isDark);
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final textMuted = AppTheme.textMuted(isDark);
 
     showDialog(
       context: context,
@@ -254,29 +268,27 @@ class BaseDropdown extends StatelessWidget {
 
             return Dialog(
               backgroundColor: bg,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: border, width: 1),
+              insetPadding: EdgeInsets.zero,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.zero,
               ),
               child: Container(
-                width: 300,
-                constraints: const BoxConstraints(maxHeight: 196),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                width: 320,
+                height: 220,
+                padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title + Settings + Close
+                    // Header Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           'Base Sessions',
-                          style: GoogleFonts.outfit(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
+                          style: AppTheme.sans(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w500,
                             color: textPrimary,
                           ),
                         ),
@@ -286,17 +298,29 @@ class BaseDropdown extends StatelessWidget {
                             IconButton(
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
-                              icon: Icon(Icons.tune_rounded, size: 17, color: textMuted),
+                              icon: Icon(
+                                Icons.tune_rounded,
+                                size: 15,
+                                color: textMuted,
+                              ),
                               onPressed: () {
                                 Navigator.pop(ctx);
-                                SettingsDialog.show(context, sessionManager: sessionManager, isDark: isDark);
+                                SettingsDialog.show(
+                                  context,
+                                  sessionManager: sessionManager,
+                                  isDark: isDark,
+                                );
                               },
                             ),
                             const SizedBox(width: 8),
                             IconButton(
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
-                              icon: Icon(Icons.close_rounded, size: 18, color: textMuted),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: textMuted,
+                              ),
                               onPressed: () => Navigator.pop(ctx),
                             ),
                           ],
@@ -305,105 +329,163 @@ class BaseDropdown extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
 
-                    // Session List
+                    // Session List (Soft rounded cards, no full-bleed Dividers)
                     Flexible(
-                      child: ListView.separated(
+                      child: ListView.builder(
                         shrinkWrap: true,
+                        padding: EdgeInsets.zero,
                         itemCount: sessions.length,
-                        separatorBuilder: (_, __) => Divider(height: 1, color: border),
                         itemBuilder: (context, index) {
                           final session = sessions[index];
                           final isActive = session.id == activeId;
 
-                          return ListTile(
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                            onTap: () {
-                              sessionManager.switchSession(session.id);
-                              Navigator.pop(ctx);
-                            },
-                            onLongPress: () => _showRenameDialog(context, session: session, parentModalContext: ctx),
-                            title: Text(
-                              session.name,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12.5,
-                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                                color: isActive
-                                    ? (isDark ? Colors.white : Colors.black)
-                                    : textMuted,
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: InkWell(
+                              onTap: () {
+                                sessionManager.switchSession(session.id);
+                                Navigator.pop(ctx);
+                              },
+                              onLongPress: () => _showRenameDialog(
+                                context,
+                                session: session,
+                                parentModalContext: ctx,
                               ),
-                            ),
-                            subtitle: Text(
-                              session.isSolved
-                                  ? '✓ Solved: ${session.solvedCode}'
-                                  : 'Code ${session.currentIndex + 1} / ${sessionManager.totalCodes}',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10.5,
-                                color: session.isSolved
-                                    ? const Color(0xFF34C759)
-                                    : textMuted,
-                              ),
-                            ),
-                            leading: Icon(
-                              isActive
-                                  ? Icons.radio_button_checked_rounded
-                                  : Icons.radio_button_off_rounded,
-                              size: 15,
-                              color: isActive ? textPrimary : textMuted,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                  icon: const Icon(Icons.edit_outlined, size: 15),
-                                  color: textMuted,
-                                  tooltip: 'Modify name',
-                                  onPressed: () {
-                                    _showRenameDialog(context, session: session, parentModalContext: ctx);
-                                  },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 7,
                                 ),
-                                if (sessions.length > 1) ...[
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    icon: const Icon(Icons.delete_outline_rounded, size: 16),
-                                    color: Colors.redAccent.withValues(alpha: 0.8),
-                                    tooltip: 'Delete base',
-                                    onPressed: () {
-                                      sessionManager.deleteSession(session.id);
-                                      setModalState(() {});
-                                    },
-                                  ),
-                                ],
-                              ],
+                                decoration: BoxDecoration(
+                                  color: isActive
+                                      ? AppTheme.controlBg(isDark)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: session.isSolved
+                                              ? AppTheme.statusActive
+                                              : (isActive
+                                                    ? textPrimary
+                                                    : textMuted.withValues(
+                                                        alpha: 0.4,
+                                                      )),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            session.name,
+                                            style: AppTheme.sans(
+                                              fontSize: 12,
+                                              fontWeight: isActive
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w400,
+                                              color: isActive
+                                                  ? textPrimary
+                                                  : textMuted,
+                                            ),
+                                          ),
+                                          Text(
+                                            session.isSolved
+                                                ? 'Solved • ${session.solvedCode}'
+                                                : 'Code #${session.currentIndex + 1} of ${sessionManager.totalCodes}',
+                                            style: AppTheme.sans(
+                                              fontSize: 10,
+                                              fontWeight: session.isSolved
+                                                  ? FontWeight.w500
+                                                  : FontWeight.w400,
+                                              color: session.isSolved
+                                                  ? AppTheme.statusActive
+                                                  : textMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 14,
+                                      ),
+                                      color: textMuted,
+                                      tooltip: 'Modify name',
+                                      onPressed: () {
+                                        _showRenameDialog(
+                                          context,
+                                          session: session,
+                                          parentModalContext: ctx,
+                                        );
+                                      },
+                                    ),
+                                    if (sessions.length > 1) ...[
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          size: 15,
+                                        ),
+                                        color: AppTheme.statusDanger.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                        tooltip: 'Delete base',
+                                        onPressed: () {
+                                          sessionManager.deleteSession(
+                                            session.id,
+                                          );
+                                          setModalState(() {});
+                                        },
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ),
                           );
                         },
                       ),
                     ),
-                    const SizedBox(height: 8),
 
-                    // Add New Base Button
+                    const SizedBox(height: 6),
+
+                    // Solid Monochrome Capsule Footer Button
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: textPrimary,
-                          side: BorderSide(color: border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      child: InkWell(
+                        onTap: () => _showNewBaseDialog(context, ctx),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 6.5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.activePillBg(isDark),
+                            borderRadius: BorderRadius.circular(999),
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Center(
+                            child: Text(
+                              'New Base Session',
+                              style: AppTheme.sans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.activePillText(isDark),
+                              ),
+                            ),
+                          ),
                         ),
-                        icon: const Icon(Icons.add_rounded, size: 15),
-                        label: Text(
-                          'New Base Session',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 11.5, fontWeight: FontWeight.w600),
-                        ),
-                        onPressed: () => _showNewBaseDialog(context, ctx),
                       ),
                     ),
                   ],
@@ -416,11 +498,15 @@ class BaseDropdown extends StatelessWidget {
     );
   }
 
-  void _showNewBaseDialog(BuildContext context, BuildContext? parentModalContext) {
+  void _showNewBaseDialog(
+    BuildContext context,
+    BuildContext? parentModalContext,
+  ) {
     final controller = TextEditingController();
-    final bg = isDark ? const Color(0xFF1A1A20) : Colors.white;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final border = isDark ? const Color(0xFF2E2E36) : const Color(0xFFE5E5EA);
+    final bg = AppTheme.bg(isDark);
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final textMuted = AppTheme.textMuted(isDark);
+    final border = AppTheme.border(isDark);
 
     showDialog(
       context: context,
@@ -428,32 +514,41 @@ class BaseDropdown extends StatelessWidget {
         return AlertDialog(
           backgroundColor: bg,
           insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          titlePadding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 6,
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: border),
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: border, width: 1),
           ),
           title: Text(
             'Name This Base',
-            style: GoogleFonts.outfit(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+            style: AppTheme.sans(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w500,
               color: textPrimary,
             ),
           ),
           content: TextField(
             controller: controller,
             autofocus: true,
-            style: GoogleFonts.plusJakartaSans(fontSize: 13, color: textPrimary),
+            style: AppTheme.sans(fontSize: 12, color: textPrimary),
             decoration: InputDecoration(
               hintText: 'e.g. Sulfur Quarry, 2x2 Bunker',
-              hintStyle: GoogleFonts.plusJakartaSans(fontSize: 12, color: Colors.grey),
+              hintStyle: AppTheme.sans(fontSize: 11.5, color: textMuted),
               filled: true,
-              fillColor: isDark ? const Color(0xFF25252E) : const Color(0xFFF2F2F5),
+              fillColor: AppTheme.controlBg(isDark),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 9,
+              ),
             ),
             onSubmitted: (val) {
               sessionManager.createSession(val);
@@ -465,14 +560,34 @@ class BaseDropdown extends StatelessWidget {
           ),
           actions: [
             TextButton(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
               onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: Colors.grey)),
+              child: Text(
+                'Cancel',
+                style: AppTheme.sans(fontSize: 11.5, color: textMuted),
+              ),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: isDark ? Colors.white : Colors.black,
-                foregroundColor: isDark ? Colors.black : Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                backgroundColor: AppTheme.activePillBg(isDark),
+                foregroundColor: AppTheme.activePillText(isDark),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
               onPressed: () {
                 sessionManager.createSession(controller.text);
@@ -481,7 +596,13 @@ class BaseDropdown extends StatelessWidget {
                   Navigator.pop(parentModalContext);
                 }
               },
-              child: Text('Create', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+              child: Text(
+                'Create',
+                style: AppTheme.sans(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
           ],
         );

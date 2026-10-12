@@ -255,23 +255,23 @@ void main() {
 
     test('isDark and Light Mode toggle persist across SessionManager instances via settings.json', () {
       final manager1 = SessionManager();
-      expect(manager1.isDark, true);
-
-      // Switch to Light Mode
-      manager1.setIsDark(false);
       expect(manager1.isDark, false);
+
+      // Switch to Dark Mode
+      manager1.setIsDark(true);
+      expect(manager1.isDark, true);
       expect(File(SessionManager.settingsFileName).existsSync(), true);
 
-      // New instance should read Light Mode (isDark: false)
+      // New instance should read Dark Mode (isDark: true)
       final manager2 = SessionManager();
-      expect(manager2.isDark, false);
-
-      // Toggle back to Dark Mode
-      manager2.toggleTheme();
       expect(manager2.isDark, true);
 
+      // Toggle back to Light Mode
+      manager2.toggleTheme();
+      expect(manager2.isDark, false);
+
       final manager3 = SessionManager();
-      expect(manager3.isDark, true);
+      expect(manager3.isDark, false);
     });
 
     test('isSoundMuted and Mute toggle persist across SessionManager instances via settings.json', () {

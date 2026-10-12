@@ -24,7 +24,8 @@ class SessionManager extends ChangeNotifier {
   String _keyPrev = 'F7';
   String _keySolved = 'F9';
   double _hudScale = 1.0;
-  bool _isDark = true;
+  double _bgOpacity = 1.0;
+  bool _isDark = false;
   bool _isSoundMuted = false;
 
   SessionManager() {
@@ -42,6 +43,7 @@ class SessionManager extends ChangeNotifier {
   String get keyPrev => _keyPrev;
   String get keySolved => _keySolved;
   double get hudScale => _hudScale;
+  double get bgOpacity => _bgOpacity;
   bool get isDark => _isDark;
   bool get isSoundMuted => _isSoundMuted;
 
@@ -89,6 +91,15 @@ class SessionManager extends ChangeNotifier {
     final clamped = scale.clamp(1.0, 2.5);
     if ((_hudScale - clamped).abs() > 0.001) {
       _hudScale = clamped;
+      saveSettings();
+      notifyListeners();
+    }
+  }
+
+  void setBgOpacity(double opacity) {
+    final clamped = opacity.clamp(0.0, 1.0);
+    if ((_bgOpacity - clamped).abs() > 0.001) {
+      _bgOpacity = clamped;
       saveSettings();
       notifyListeners();
     }
@@ -198,6 +209,10 @@ class SessionManager extends ChangeNotifier {
           final scaleVal = (data['hudScale'] as num?)?.toDouble() ?? 1.0;
           _hudScale = scaleVal.clamp(1.0, 2.5);
         }
+        if (data.containsKey('bgOpacity')) {
+          final opVal = (data['bgOpacity'] as num?)?.toDouble() ?? 1.0;
+          _bgOpacity = opVal.clamp(0.0, 1.0);
+        }
         if (data.containsKey('isDark')) {
           _isDark = data['isDark'] == true;
         }
@@ -220,6 +235,7 @@ class SessionManager extends ChangeNotifier {
         'keyPrev': _keyPrev,
         'keySolved': _keySolved,
         'hudScale': _hudScale,
+        'bgOpacity': _bgOpacity,
         'isDark': _isDark,
         'isSoundMuted': _isSoundMuted,
       };

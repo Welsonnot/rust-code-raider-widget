@@ -4,27 +4,27 @@
 
 import 'dart:async';
 import 'dart:convert' show jsonDecode;
-import 'dart:io' show File, Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'models/keybind_config.dart';
 import 'models/session_manager.dart';
 import 'services/audio_service.dart';
+import 'theme/app_theme.dart';
 import 'widgets/base_dropdown.dart';
 import 'widgets/history_dialog.dart';
 import 'widgets/settings_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  assert(() {
-    verifyKeydriverIntegrity(verbose: true);
-    return true;
-  }());
+
+  // Verify scancode translation table integrity at startup
+  verifyKeydriverIntegrity(verbose: true);
+
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     try {
       await windowManager.ensureInitialized();
@@ -33,9 +33,11 @@ void main() async {
       try {
         final file = File(SessionManager.settingsFileName);
         if (file.existsSync()) {
-          final data = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+          final data =
+              jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
           if (data.containsKey('hudScale')) {
-            initialScale = ((data['hudScale'] as num?)?.toDouble() ?? 1.0).clamp(1.0, 2.5);
+            initialScale = ((data['hudScale'] as num?)?.toDouble() ?? 1.0)
+                .clamp(1.0, 2.5);
           }
         }
       } catch (_) {}
@@ -48,130 +50,90 @@ void main() async {
         titleBarStyle: TitleBarStyle.hidden,
         alwaysOnTop: true,
       );
+
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
         await windowManager.focus();
         await windowManager.setAlwaysOnTop(true);
       });
     } catch (e) {
-      debugPrint('WindowManager init error: $e');
+      debugPrint('Desktop window initialization skipped or failed: $e');
     }
   }
+
   runApp(const MinimalRaidApp());
 }
 
-class MinimalRaidApp extends StatefulWidget {
-  final SessionManager? sessionManager;
-  const MinimalRaidApp({super.key, this.sessionManager});
-
-  @override
-  State<MinimalRaidApp> createState() => _MinimalRaidAppState();
-}
-
-class _MinimalRaidAppState extends State<MinimalRaidApp> {
-  late final SessionManager _sessionManager;
-
-  @override
-  void initState() {
-    super.initState();
-    _sessionManager = widget.sessionManager ?? SessionManager();
-    _sessionManager.addListener(_onManagerChanged);
-  }
-
-  @override
-  void dispose() {
-    _sessionManager.removeListener(_onManagerChanged);
-    super.dispose();
-  }
-
-  void _onManagerChanged() {
-    if (mounted) setState(() {});
-  }
-
-  void _toggleTheme() {
-    _sessionManager.toggleTheme();
-  }
+class MinimalRaidApp extends StatelessWidget {
+  const MinimalRaidApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = _sessionManager.isDark;
     return MaterialApp(
-      title: 'Code Raid Widget',
+      title: 'Rust Code Raider',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        brightness: isDark ? Brightness.dark : Brightness.light,
-        scaffoldBackgroundColor: Colors.transparent,
         useMaterial3: true,
-        textTheme: GoogleFonts.plusJakartaSansTextTheme(
-          isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
-        ),
+        scaffoldBackgroundColor: Colors.transparent,
       ),
-      home: RaidCardScreen(
-        isDark: isDark,
-        onToggleTheme: _toggleTheme,
-        sessionManager: _sessionManager,
-      ),
+      home: const RaidCounterHud(),
     );
   }
 }
 
-class RaidCardScreen extends StatefulWidget {
-  final bool isDark;
-  final VoidCallback onToggleTheme;
-  final SessionManager? sessionManager;
-
-  const RaidCardScreen({
-    super.key,
-    required this.isDark,
-    required this.onToggleTheme,
-    this.sessionManager,
-  });
+class RaidCounterHud extends StatefulWidget {
+  const RaidCounterHud({super.key});
 
   @override
-  State<RaidCardScreen> createState() => _RaidCardScreenState();
+  State<RaidCounterHud> createState() => _RaidCounterHudState();
 }
 
-class _RaidCardScreenState extends State<RaidCardScreen> with WindowListener {
+class _RaidCounterHudState extends State<RaidCounterHud> with WindowListener {
   late final SessionManager _sessionManager;
+  HotKey? _nextHotKey;
+  HotKey? _prevHotKey;
+  HotKey? _solvedHotKey;
+  bool _registeredHotkeysActive = false;
 
+  String _registeredKeyNext = '';
+  String _registeredKeyBack = '';
+  String _registeredKeySolved = '';
+
+  double _appliedScale = 1.0;
+  String _appliedPosition = '';
+
+  // Dynamic feedback state
+  int _slideDirection = 1; // 1 = forward (Next), -1 = backward (Back)
+  String? _activeActionPulse; // 'back', 'next', or 'solved'
+  Timer? _pulseResetTimer;
   Timer? _topmostReinforceTimer;
-  bool _lastHotkeysState = true;
-  String _lastHudPosition = '';
-  String _lastKeyNext = '';
-  String _lastKeyPrev = '';
-  String _lastKeySolved = '';
-  double _lastHudScale = 1.0;
+
+  bool get _isDesktop =>
+      !kIsWeb &&
+      !Platform.environment.containsKey('FLUTTER_TEST') &&
+      (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      windowManager.addListener(this);
-      if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-        _topmostReinforceTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-          _reinforceAlwaysOnTop();
-        });
-      }
-    }
-    _sessionManager = widget.sessionManager ?? SessionManager();
-    _sessionManager.addListener(_onStateChanged);
-    _lastHotkeysState = _sessionManager.isHotkeysEnabled;
-    _lastHudPosition = _sessionManager.hudPosition;
-    _lastKeyNext = _sessionManager.keyNext;
-    _lastKeyPrev = _sessionManager.keyPrev;
-    _lastKeySolved = _sessionManager.keySolved;
-    _lastHudScale = _sessionManager.hudScale;
+    _sessionManager = SessionManager();
+    _sessionManager.addListener(_onSessionManagerChanged);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _setupWindowAndHotkeys();
-    });
+    if (_isDesktop) {
+      windowManager.addListener(this);
+      _topmostReinforceTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        _reinforceAlwaysOnTop();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _syncWindowBounds(forcePosition: true);
+        await _syncHotKeys();
+      });
+    }
   }
 
   void _reinforceAlwaysOnTop() {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      if (_sessionManager.isHotkeysEnabled) {
-        windowManager.setAlwaysOnTop(true);
-      }
+    if (_isDesktop && _sessionManager.isHotkeysEnabled) {
+      windowManager.setAlwaysOnTop(true);
     }
   }
 
@@ -186,128 +148,94 @@ class _RaidCardScreenState extends State<RaidCardScreen> with WindowListener {
     _reinforceAlwaysOnTop();
   }
 
-  Future<void> _setupWindowAndHotkeys() async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      try {
-        await windowManager.ensureInitialized();
-        await windowManager.setResizable(true);
-        await windowManager.setAspectRatio(320 / 220);
-        await windowManager.setMinimumSize(const Size(320, 220));
-        final scale = _sessionManager.hudScale;
-        await windowManager.setSize(Size(320 * scale, 220 * scale));
-        await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-        await windowManager.setBackgroundColor(Colors.transparent);
-        await _applyWindowAlignment(_sessionManager.hudPosition);
-        await windowManager.show();
-        await windowManager.focus();
-        if (_sessionManager.isHotkeysEnabled) {
-          await windowManager.setAlwaysOnTop(true);
-        }
-      } catch (e) {
-        debugPrint('WindowManager setup error: $e');
-      }
-
-      if (_sessionManager.isHotkeysEnabled) {
-        await _registerGlobalHotkeys();
-      }
-    }
-  }
-
-  Future<void> _registerGlobalHotkeys() async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      try {
-        await hotKeyManager.unregisterAll();
-
-        final nextKey = getPhysicalKeyForLabel(_sessionManager.keyNext, fallback: PhysicalKeyboardKey.f8);
-        final prevKey = getPhysicalKeyForLabel(_sessionManager.keyPrev, fallback: PhysicalKeyboardKey.f7);
-        final solvedKey = getPhysicalKeyForLabel(_sessionManager.keySolved, fallback: PhysicalKeyboardKey.f9);
-
-        await hotKeyManager.register(
-          HotKey(key: nextKey, modifiers: [], scope: HotKeyScope.system),
-          keyDownHandler: (_) => _advanceNext(),
-        );
-
-        await hotKeyManager.register(
-          HotKey(key: prevKey, modifiers: [], scope: HotKeyScope.system),
-          keyDownHandler: (_) => _stepPrev(),
-        );
-
-        await hotKeyManager.register(
-          HotKey(key: solvedKey, modifiers: [], scope: HotKeyScope.system),
-          keyDownHandler: (_) => _markSolved(),
-        );
-
-        // Register auxiliary numpad shortcuts if non-conflicting
-        if (nextKey != PhysicalKeyboardKey.numpadAdd &&
-            prevKey != PhysicalKeyboardKey.numpadAdd &&
-            solvedKey != PhysicalKeyboardKey.numpadAdd) {
-          await hotKeyManager.register(
-            HotKey(key: PhysicalKeyboardKey.numpadAdd, modifiers: [], scope: HotKeyScope.system),
-            keyDownHandler: (_) => _advanceNext(),
-          );
-        }
-
-        if (nextKey != PhysicalKeyboardKey.numpadSubtract &&
-            prevKey != PhysicalKeyboardKey.numpadSubtract &&
-            solvedKey != PhysicalKeyboardKey.numpadSubtract) {
-          await hotKeyManager.register(
-            HotKey(key: PhysicalKeyboardKey.numpadSubtract, modifiers: [], scope: HotKeyScope.system),
-            keyDownHandler: (_) => _stepPrev(),
-          );
-        }
-      } catch (e) {
-        debugPrint('Global hotkey registration error: $e');
-      }
-    }
-  }
-
-  void _onStateChanged() {
+  void _triggerActionPulse(String action) {
+    _pulseResetTimer?.cancel();
     if (mounted) {
-      final hotkeysChanged = _lastKeyNext != _sessionManager.keyNext ||
-          _lastKeyPrev != _sessionManager.keyPrev ||
-          _lastKeySolved != _sessionManager.keySolved ||
-          _lastHotkeysState != _sessionManager.isHotkeysEnabled;
+      setState(() {
+        _activeActionPulse = action;
+      });
+    }
+    _pulseResetTimer = Timer(const Duration(milliseconds: 160), () {
+      if (mounted) {
+        setState(() {
+          _activeActionPulse = null;
+        });
+      }
+    });
+  }
 
-      if (hotkeysChanged) {
-        _lastHotkeysState = _sessionManager.isHotkeysEnabled;
-        _lastKeyNext = _sessionManager.keyNext;
-        _lastKeyPrev = _sessionManager.keyPrev;
-        _lastKeySolved = _sessionManager.keySolved;
-        _updateHotkeyRegistration(_lastHotkeysState);
+  void _handleNextAction() {
+    _slideDirection = 1;
+    _triggerActionPulse('next');
+    AudioService.playNextBack(isMuted: _sessionManager.isSoundMuted);
+    _sessionManager.nextCode();
+  }
+
+  void _handleBackAction() {
+    _slideDirection = -1;
+    _triggerActionPulse('back');
+    AudioService.playNextBack(isMuted: _sessionManager.isSoundMuted);
+    _sessionManager.previousCode();
+  }
+
+  void _handleSolvedAction() {
+    _triggerActionPulse('solved');
+    final willBeSolved = !_sessionManager.activeSession.isSolved;
+    if (willBeSolved) {
+      AudioService.playCodeRight(isMuted: _sessionManager.isSoundMuted);
+    } else {
+      AudioService.playNextBack(isMuted: _sessionManager.isSoundMuted);
+    }
+    _sessionManager.toggleSolved();
+  }
+
+  void _onSessionManagerChanged() {
+    if (_isDesktop) {
+      final keybindsChanged =
+          _registeredKeyNext != _sessionManager.keyNext ||
+          _registeredKeyBack != _sessionManager.keyPrev ||
+          _registeredKeySolved != _sessionManager.keySolved;
+
+      if (_registeredHotkeysActive != _sessionManager.isHotkeysEnabled ||
+          keybindsChanged) {
+        _syncHotKeys();
       }
-      if (_lastHudPosition != _sessionManager.hudPosition) {
-        _lastHudPosition = _sessionManager.hudPosition;
-        _applyWindowAlignment(_lastHudPosition);
+
+      final scaleChanged =
+          (_appliedScale - _sessionManager.hudScale).abs() > 0.01;
+      final posChanged = _appliedPosition != _sessionManager.hudPosition;
+      if (scaleChanged || posChanged) {
+        _syncWindowBounds(forcePosition: posChanged);
       }
-      if ((_lastHudScale - _sessionManager.hudScale).abs() > 0.001) {
-        _lastHudScale = _sessionManager.hudScale;
-        _applyWindowScale(_lastHudScale);
-      }
+    }
+    if (mounted) {
       setState(() {});
     }
   }
 
-  Future<void> _applyWindowScale(double scale) async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      try {
-        final targetSize = Size(320 * scale, 220 * scale);
-        await windowManager.setSize(targetSize);
-        await windowManager.setAspectRatio(320 / 220);
-        await _applyWindowAlignment(_sessionManager.hudPosition);
-        if (_sessionManager.isHotkeysEnabled) {
-          await windowManager.setAlwaysOnTop(true);
-        }
-      } catch (e) {
-        debugPrint('Error applying window scale: $e');
-      }
-    }
-  }
+  Future<void> _syncWindowBounds({bool forcePosition = false}) async {
+    if (!_isDesktop) return;
+    try {
+      final scale = _sessionManager.hudScale;
+      final pos = _sessionManager.hudPosition;
 
-  Future<void> _applyWindowAlignment(String position) async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      try {
+      final width = (320 * scale).roundToDouble();
+      final height = (220 * scale).roundToDouble();
+
+      _appliedScale = scale;
+      _appliedPosition = pos;
+
+      await windowManager.ensureInitialized();
+      await windowManager.setResizable(true);
+      await windowManager.setAspectRatio(320 / 220);
+      await windowManager.setMinimumSize(const Size(320, 220));
+      await windowManager.setSize(Size(width, height));
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setBackgroundColor(Colors.transparent);
+
+      if (forcePosition) {
         Alignment alignment;
-        switch (position) {
+        switch (pos) {
           case 'topLeft':
             alignment = Alignment.topLeft;
             break;
@@ -328,199 +256,198 @@ class _RaidCardScreenState extends State<RaidCardScreen> with WindowListener {
             break;
         }
         await windowManager.setAlignment(alignment);
-        if (_sessionManager.isHotkeysEnabled) {
-          await windowManager.setAlwaysOnTop(true);
-        }
-      } catch (e) {
-        debugPrint('Error applying window alignment: $e');
       }
+
+      await windowManager.show();
+      await windowManager.focus();
+      if (_sessionManager.isHotkeysEnabled) {
+        await windowManager.setAlwaysOnTop(true);
+      }
+    } catch (e) {
+      debugPrint('Failed to sync window bounds: $e');
     }
   }
 
-  Future<void> _updateHotkeyRegistration(bool enabled) async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      if (enabled) {
-        await _registerGlobalHotkeys();
-        try {
-          await windowManager.setAlwaysOnTop(true);
-        } catch (_) {}
-      } else {
-        try {
-          await hotKeyManager.unregisterAll();
-        } catch (e) {
-          debugPrint('Unregister hotkeys error: $e');
-        }
+  Future<void> _syncHotKeys() async {
+    if (!_isDesktop) return;
+    try {
+      await hotKeyManager.unregisterAll();
+      _registeredHotkeysActive = _sessionManager.isHotkeysEnabled;
+      _registeredKeyNext = _sessionManager.keyNext;
+      _registeredKeyBack = _sessionManager.keyPrev;
+      _registeredKeySolved = _sessionManager.keySolved;
+
+      if (!_registeredHotkeysActive) {
         try {
           await windowManager.setAlwaysOnTop(false);
         } catch (_) {}
+        return;
       }
-    }
-  }
 
-  bool _isMovingForward = true;
-  String? _activeActuationKey;
+      try {
+        await windowManager.setAlwaysOnTop(true);
+      } catch (_) {}
 
-  void _triggerActuation(String actionId) {
-    if (mounted) {
-      setState(() {
-        _activeActuationKey = actionId;
-      });
-      Future.delayed(const Duration(milliseconds: 140), () {
-        if (mounted && _activeActuationKey == actionId) {
-          setState(() {
-            _activeActuationKey = null;
-          });
-        }
-      });
-    }
-  }
+      if (!verifyKeydriverIntegrity()) {
+        return;
+      }
 
-  void _advanceNext() {
-    _triggerActuation('next');
-    if (mounted) {
-      setState(() {
-        _isMovingForward = true;
-      });
-    }
-    _sessionManager.nextCode();
-    AudioService.playNextBack(isMuted: _sessionManager.isSoundMuted);
-  }
+      final nextPhysical = getPhysicalKeyForLabel(
+        _registeredKeyNext,
+        fallback: PhysicalKeyboardKey.f8,
+      );
+      final prevPhysical = getPhysicalKeyForLabel(
+        _registeredKeyBack,
+        fallback: PhysicalKeyboardKey.f7,
+      );
+      final solvedPhysical = getPhysicalKeyForLabel(
+        _registeredKeySolved,
+        fallback: PhysicalKeyboardKey.f9,
+      );
 
-  void _stepPrev() {
-    _triggerActuation('prev');
-    if (mounted) {
-      setState(() {
-        _isMovingForward = false;
-      });
-    }
-    _sessionManager.previousCode();
-    AudioService.playNextBack(isMuted: _sessionManager.isSoundMuted);
-  }
+      _nextHotKey = HotKey(
+        key: nextPhysical,
+        modifiers: const [],
+        scope: HotKeyScope.system,
+      );
+      _prevHotKey = HotKey(
+        key: prevPhysical,
+        modifiers: const [],
+        scope: HotKeyScope.system,
+      );
+      _solvedHotKey = HotKey(
+        key: solvedPhysical,
+        modifiers: const [],
+        scope: HotKeyScope.system,
+      );
 
-  void _markSolved() {
-    _triggerActuation('solved');
-    _sessionManager.toggleSolved();
-    if (_sessionManager.activeSession.isSolved) {
-      AudioService.playCodeRight(isMuted: _sessionManager.isSoundMuted);
-    } else {
-      AudioService.playNextBack(isMuted: _sessionManager.isSoundMuted);
-    }
-  }
+      await hotKeyManager.register(
+        _nextHotKey!,
+        keyDownHandler: (_) => _handleNextAction(),
+      );
 
-  void _toggleHotkeys() {
-    _sessionManager.toggleHotkeys();
-    if (!_sessionManager.isSoundMuted) {
-      SystemSound.play(SystemSoundType.click);
+      await hotKeyManager.register(
+        _prevHotKey!,
+        keyDownHandler: (_) => _handleBackAction(),
+      );
+
+      await hotKeyManager.register(
+        _solvedHotKey!,
+        keyDownHandler: (_) => _handleSolvedAction(),
+      );
+
+      if (nextPhysical != PhysicalKeyboardKey.numpadAdd &&
+          prevPhysical != PhysicalKeyboardKey.numpadAdd &&
+          solvedPhysical != PhysicalKeyboardKey.numpadAdd) {
+        await hotKeyManager.register(
+          HotKey(
+            key: PhysicalKeyboardKey.numpadAdd,
+            modifiers: const [],
+            scope: HotKeyScope.system,
+          ),
+          keyDownHandler: (_) => _handleNextAction(),
+        );
+      }
+
+      if (nextPhysical != PhysicalKeyboardKey.numpadSubtract &&
+          prevPhysical != PhysicalKeyboardKey.numpadSubtract &&
+          solvedPhysical != PhysicalKeyboardKey.numpadSubtract) {
+        await hotKeyManager.register(
+          HotKey(
+            key: PhysicalKeyboardKey.numpadSubtract,
+            modifiers: const [],
+            scope: HotKeyScope.system,
+          ),
+          keyDownHandler: (_) => _handleBackAction(),
+        );
+      }
+    } catch (e) {
+      debugPrint('Hotkey sync error: $e');
     }
   }
 
   @override
   void dispose() {
-    AudioService.dispose();
+    _pulseResetTimer?.cancel();
     _topmostReinforceTimer?.cancel();
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    _sessionManager.removeListener(_onSessionManagerChanged);
+    _sessionManager.dispose();
+    AudioService.dispose();
+    if (_isDesktop) {
       windowManager.removeListener(this);
-      try {
-        hotKeyManager.unregisterAll();
-      } catch (_) {}
+      hotKeyManager.unregisterAll();
     }
-    _sessionManager.removeListener(_onStateChanged);
     super.dispose();
   }
 
-  String _formatCount(int number) {
-    if (number < 1000) return number.toString();
-    final s = number.toString();
-    final buffer = StringBuffer();
-    final offset = s.length % 3;
-    if (offset > 0) {
-      buffer.write(s.substring(0, offset));
+  Future<void> _closeApp() async {
+    if (_isDesktop) {
+      await hotKeyManager.unregisterAll();
+      await windowManager.close();
+    } else {
+      SystemNavigator.pop();
     }
-    for (int i = offset; i < s.length; i += 3) {
-      if (buffer.isNotEmpty) buffer.write(',');
-      buffer.write(s.substring(i, i + 3));
-    }
-    return buffer.toString();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.isDark;
-    final isCompleted = _sessionManager.isCompleted;
-    final isSolved = _sessionManager.activeSession.isSolved;
-    final currentIndex = _sessionManager.currentIndex;
+    final isDark = _sessionManager.isDark;
+    final active = _sessionManager.activeSession;
+    final currentCode = _sessionManager.currentTargetCode.isEmpty
+        ? '----'
+        : _sessionManager.currentTargetCode;
     final totalCodes = _sessionManager.totalCodes;
+    final currentRank = totalCodes == 0 ? 0 : active.currentIndex + 1;
+    final isSolved = active.isSolved;
+    final hotkeysActive = _sessionManager.isHotkeysEnabled;
 
-    final cardBg = isDark ? const Color(0xF2121216) : const Color(0xF7FFFFFF);
-    final textPrimary = isDark ? const Color(0xFFFFFFFF) : const Color(0xFF111111);
-    final textMuted = isDark ? const Color(0xFF8E8E93) : const Color(0xFF636366);
-    final border = isDark ? const Color(0xFF26262E) : const Color(0xFFDCDCDE);
-    const successGreen = Color(0xFF34C759);
+    final bg = AppTheme.bg(isDark);
+    final bgOpacity = _sessionManager.bgOpacity;
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final textMuted = AppTheme.textMuted(isDark);
+    final controlBg = AppTheme.controlBg(isDark);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onPanStart: (_) {
-          if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+          if (_isDesktop) {
             windowManager.startDragging();
           }
         },
-        onPanEnd: (_) {
-          _reinforceAlwaysOnTop();
-        },
         child: SizedBox.expand(
           child: FittedBox(
-            fit: BoxFit.contain,
+            fit: BoxFit.fill,
+            alignment: Alignment.center,
             child: SizedBox(
               width: 320,
               height: 220,
               child: Container(
-                width: 320,
-                height: 220,
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: border, width: 1.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+                padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+                color: bg.withValues(alpha: bgOpacity),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Row 1: Session name / Dropdown + Drag grip + Status Pill (Active / Paused) + Audio Mute + Theme + History + Settings
+                    // =========================================================
+                    // Top Row: City/Base Title (left) + Status Pill & Circular Icons (right)
+                    // =========================================================
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Flexible(
+                        Expanded(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.asset(
-                                  'assets/images/app_logo_small.png',
-                                  width: 14,
-                                  height: 14,
-                                  fit: BoxFit.cover,
+                              Tooltip(
+                                message: 'Drag anywhere to move HUD',
+                                child: Icon(
+                                  Icons.drag_indicator_rounded,
+                                  size: 11,
+                                  color: textMuted.withValues(alpha: 0.35),
                                 ),
                               ),
-                              const SizedBox(width: 3),
-                              Icon(
-                                Icons.drag_indicator_rounded,
-                                size: 14,
-                                color: textMuted.withValues(alpha: 0.4),
-                              ),
-                              const SizedBox(width: 2),
                               Flexible(
                                 child: BaseDropdown(
                                   sessionManager: _sessionManager,
@@ -530,259 +457,217 @@ class _RaidCardScreenState extends State<RaidCardScreen> with WindowListener {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 4),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // History Icon
-                            InkWell(
-                              borderRadius: BorderRadius.circular(6),
+                            _buildStatusIndicator(
+                              hotkeysActive: hotkeysActive,
+                              isDark: isDark,
+                              textPrimary: textPrimary,
+                              textMuted: textMuted,
+                              controlBg: controlBg,
+                            ),
+                            const SizedBox(width: 4),
+                            _buildCircularIconBtn(
+                              icon: _sessionManager.isSoundMuted
+                                  ? Icons.volume_off_rounded
+                                  : Icons.volume_up_rounded,
+                              tooltip: _sessionManager.isSoundMuted
+                                  ? 'Unmute Sound Effects'
+                                  : 'Mute Sound Effects',
+                              isActive: _sessionManager.isSoundMuted,
+                              isDark: isDark,
+                              onTap: () => _sessionManager.toggleSoundMuted(),
+                            ),
+                            const SizedBox(width: 3),
+                            _buildCircularIconBtn(
+                              icon: isDark
+                                  ? Icons.light_mode_rounded
+                                  : Icons.dark_mode_rounded,
+                              tooltip: isDark
+                                  ? 'Switch to Light Mode'
+                                  : 'Switch to Dark Mode',
+                              isDark: isDark,
+                              onTap: () => _sessionManager.setIsDark(!isDark),
+                            ),
+                            const SizedBox(width: 3),
+                            _buildCircularIconBtn(
+                              icon: Icons.history_rounded,
+                              tooltip:
+                                  'Attempt History (${active.history.length})',
+                              isDark: isDark,
                               onTap: () => HistoryDialog.show(
                                 context,
                                 sessionManager: _sessionManager,
                                 isDark: isDark,
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  Icons.history_rounded,
-                                  size: 16,
-                                  color: textMuted,
-                                ),
-                              ),
                             ),
-                            const SizedBox(width: 4),
-
-                            // Status Pill (Active / Paused)
-                            GestureDetector(
-                              onTap: _toggleHotkeys,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                                decoration: BoxDecoration(
-                                  color: _sessionManager.isHotkeysEnabled
-                                      ? const Color(0x2234C759)
-                                      : const Color(0x22FF9500),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: _sessionManager.isHotkeysEnabled
-                                        ? const Color(0x6634C759)
-                                        : const Color(0x66FF9500),
-                                    width: 0.8,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 5,
-                                      height: 5,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: _sessionManager.isHotkeysEnabled
-                                            ? const Color(0xFF34C759)
-                                            : const Color(0xFFFF9500),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _sessionManager.isHotkeysEnabled ? 'Active' : 'Paused',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: -0.1,
-                                        color: _sessionManager.isHotkeysEnabled
-                                            ? const Color(0xFF34C759)
-                                            : const Color(0xFFFF9500),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-
-                            // Audio Mute Toggle Icon
-                            InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () {
-                                _sessionManager.toggleSoundMuted();
-                                if (!_sessionManager.isSoundMuted) {
-                                  SystemSound.play(SystemSoundType.click);
-                                }
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  _sessionManager.isSoundMuted
-                                      ? Icons.volume_off_rounded
-                                      : Icons.volume_up_rounded,
-                                  size: 16,
-                                  color: _sessionManager.isSoundMuted
-                                      ? const Color(0xFFFF9500)
-                                      : textMuted,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-
-                            // Theme Toggle Icon (Sun / Moon)
-                            InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () {
-                                _sessionManager.toggleTheme();
-                                SystemSound.play(SystemSoundType.click);
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                                  size: 16,
-                                  color: textMuted,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-
-                            // Settings Icon
-                            InkWell(
-                              borderRadius: BorderRadius.circular(6),
+                            const SizedBox(width: 3),
+                            _buildCircularIconBtn(
+                              icon: Icons.tune_rounded,
+                              tooltip: 'Settings',
+                              isDark: isDark,
                               onTap: () => SettingsDialog.show(
                                 context,
                                 sessionManager: _sessionManager,
                                 isDark: isDark,
                               ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Icon(
-                                  Icons.tune_rounded,
-                                  size: 16,
-                                  color: textMuted,
-                                ),
-                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            _buildCircularIconBtn(
+                              icon: Icons.close,
+                              tooltip: 'Exit',
+                              isDark: isDark,
+                              onTap: _closeApp,
                             ),
                           ],
                         ),
                       ],
                     ),
 
-                    // Row 2: Dynamic Large High-Contrast Monospace Code Display (52px) with Ticker Animation
-                    RepaintBoundary(
-                      child: Center(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          transitionBuilder: (Widget child, Animation<double> animation) {
-                            final inOffset = Tween<Offset>(
-                              begin: Offset(0.0, _isMovingForward ? 0.35 : -0.35),
-                              end: Offset.zero,
-                            ).animate(animation);
-                            return SlideTransition(
-                              position: inOffset,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: isSolved
-                              ? Row(
-                                  key: ValueKey('solved_${_sessionManager.activeSession.solvedCode}'),
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.check_circle_rounded, size: 28, color: successGreen),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _sessionManager.activeSession.solvedCode ?? '',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 48,
-                                        fontWeight: FontWeight.w800,
-                                        letterSpacing: -1.0,
-                                        height: 1.0,
-                                        color: successGreen,
+                    // =========================================================
+                    // Left-Aligned Editorial Readout Block
+                    // =========================================================
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 2),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 4-Digit Target Code Readout (Instrument Sans w400, left-aligned)
+                              RepaintBoundary(
+                                child: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 140),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  layoutBuilder:
+                                      (currentChild, previousChildren) {
+                                        return Stack(
+                                          alignment: Alignment.centerLeft,
+                                          children: <Widget>[
+                                            ...previousChildren,
+                                            if (currentChild != null)
+                                              currentChild,
+                                          ],
+                                        );
+                                      },
+                                  transitionBuilder: (child, animation) {
+                                    final isIncoming =
+                                        child.key ==
+                                        ValueKey('${currentCode}_$isSolved');
+                                    final beginOffset = isIncoming
+                                        ? Offset(0.08 * _slideDirection, 0.0)
+                                        : Offset(-0.08 * _slideDirection, 0.0);
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position: Tween<Offset>(
+                                          begin: beginOffset,
+                                          end: Offset.zero,
+                                        ).animate(animation),
+                                        child: child,
                                       ),
-                                    ),
-                                  ],
-                                )
-                              : (isCompleted
-                                  ? Text(
-                                      'All Tried',
-                                      key: const ValueKey('all_tried'),
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -0.5,
-                                        height: 1.1,
-                                        color: textPrimary,
-                                      ),
-                                    )
-                                  : Opacity(
-                                      key: ValueKey('code_${_sessionManager.currentTargetCode}'),
-                                      opacity: _sessionManager.isHotkeysEnabled ? 1.0 : 0.88,
-                                      child: Text(
-                                        _sessionManager.currentTargetCode,
-                                        style: GoogleFonts.jetBrainsMono(
-                                          fontSize: 52,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -1.5,
+                                    );
+                                  },
+                                  child: Row(
+                                    key: ValueKey('${currentCode}_$isSolved'),
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        currentCode,
+                                        style: AppTheme.mono(
+                                          fontSize: 60,
+                                          fontWeight: FontWeight.w400,
+                                          letterSpacing: -2.0,
                                           height: 1.0,
-                                          color: isDark ? Colors.white : const Color(0xFF111111),
+                                          color: isSolved
+                                              ? AppTheme.statusActive
+                                              : textPrimary,
                                         ),
                                       ),
-                                    )),
+                                      if (isSolved) ...[
+                                        const SizedBox(width: 8),
+                                        const Icon(
+                                          Icons.check_circle_rounded,
+                                          color: AppTheme.statusActive,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 2),
+
+                              // Subtitle positioned directly BELOW the numerals (no yellow dot)
+                              Text(
+                                isSolved
+                                    ? 'Solved at #$currentRank of ${_formatNumber(totalCodes)} • ${active.currentIndex} used'
+                                    : '#$currentRank of ${_formatNumber(totalCodes)} • ${active.currentIndex} used',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: AppTheme.sans(
+                                  fontSize: 10.5,
+                                  fontWeight: isSolved
+                                      ? FontWeight.w500
+                                      : FontWeight.w400,
+                                  letterSpacing: -0.15,
+                                  color: isSolved
+                                      ? AppTheme.statusActive
+                                      : textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
 
-                    // Hierarchy & Progress indicator (small text showing hierarchy from first to last and codes used)
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.0),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF18181E) : const Color(0xFFEBEBF0),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: isSolved
-                                ? successGreen.withValues(alpha: 0.5)
-                                : (isDark ? const Color(0xFF262630) : const Color(0xFFD4D4D8)),
-                            width: 0.8,
+                    // =========================================================
+                    // Bottom Capsule Control Row (Matches "12h | 24h" & Monochrome Dock)
+                    // =========================================================
+                    SizedBox(
+                      height: 30,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _buildCapsuleButton(
+                              keyLabel: _sessionManager.keyPrev,
+                              actionLabel: 'Back',
+                              isDark: isDark,
+                              isActuated: _activeActionPulse == 'back',
+                              onTap: _handleBackAction,
+                            ),
                           ),
-                        ),
-                        child: Text(
-                          isSolved
-                              ? 'Solved at #${currentIndex + 1} of ${_formatCount(totalCodes)} • $currentIndex used'
-                              : (isCompleted
-                                  ? 'All ${_formatCount(totalCodes)} codes used'
-                                  : '#${currentIndex + 1} of ${_formatCount(totalCodes)} • $currentIndex used'),
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.2,
-                            color: isSolved ? successGreen : textMuted,
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: _buildCapsuleButton(
+                              keyLabel: _sessionManager.keyNext,
+                              actionLabel: 'Next',
+                              isDark: isDark,
+                              isActuated: _activeActionPulse == 'next',
+                              onTap: _handleNextAction,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: _buildCapsuleButton(
+                              keyLabel: _sessionManager.keySolved,
+                              actionLabel: isSolved ? 'Solved ✓' : 'Solved',
+                              isDark: isDark,
+                              isHighlighted: isSolved,
+                              isActuated: _activeActionPulse == 'solved',
+                              onTap: _handleSolvedAction,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-
-                    // Row 3: Compact Hotkey Helper Badges ([key] Next, [key] Back, [key] Solved) with Dynamic Feedback
-                    Row(
-                      children: [
-                        Expanded(child: _buildHotkeyBadge(_sessionManager.keyPrev, 'Back', _stepPrev, actionId: 'prev')),
-                        const SizedBox(width: 4),
-                        Expanded(child: _buildHotkeyBadge(_sessionManager.keyNext, 'Next', _advanceNext, actionId: 'next')),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: _buildHotkeyBadge(
-                            _sessionManager.keySolved,
-                            isSolved ? 'Solved ✓' : 'Solved',
-                            _markSolved,
-                            isHighlight: isSolved,
-                            actionId: 'solved',
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -794,77 +679,148 @@ class _RaidCardScreenState extends State<RaidCardScreen> with WindowListener {
     );
   }
 
-  Widget _buildHotkeyBadge(
-    String keyLabel,
-    String actionLabel,
-    VoidCallback onTap, {
-    bool isHighlight = false,
-    String actionId = '',
+  Widget _buildStatusIndicator({
+    required bool hotkeysActive,
+    required bool isDark,
+    required Color textPrimary,
+    required Color textMuted,
+    required Color controlBg,
   }) {
-    final isDark = widget.isDark;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final textMuted = isDark ? const Color(0xFF8E8E93) : const Color(0xFF636366);
-    final isActuated = _activeActuationKey == actionId && actionId.isNotEmpty;
+    final isPaused = !hotkeysActive;
+    final pillBg = isPaused ? AppTheme.activePillBg(isDark) : controlBg;
+    final pillText = isPaused ? AppTheme.activePillText(isDark) : textMuted;
 
-    return AnimatedScale(
-      scale: isActuated ? 0.93 : 1.0,
-      duration: const Duration(milliseconds: 100),
-      curve: Curves.easeOutCubic,
+    return Tooltip(
+      message: hotkeysActive
+          ? 'Hotkeys Active (click to pause)'
+          : 'Hotkeys Paused (click to resume)',
       child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3.0),
+        onTap: () => _sessionManager.toggleHotkeys(),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          height: 22,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isActuated
-                ? (isDark ? const Color(0xFF383844) : const Color(0xFFD0D0DA))
-                : (isHighlight
-                    ? const Color(0x3334C759)
-                    : (isDark ? const Color(0xFF1C1C22) : const Color(0xFFE8E8ED))),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: isActuated
-                  ? const Color(0xFF007AFF)
-                  : (isHighlight
-                      ? const Color(0xFF34C759)
-                      : (isDark ? const Color(0xFF2E2E38) : const Color(0xFFD1D1D6))),
-              width: isActuated ? 1.2 : 0.8,
+            color: pillBg,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            hotkeysActive ? 'Active' : 'Paused',
+            style: AppTheme.sans(
+              fontSize: 10.5,
+              fontWeight: isPaused ? FontWeight.w600 : FontWeight.w400,
+              color: pillText,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF282832) : const Color(0xFFD6D6DC),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(
+        ),
+      ),
+    );
+  }
+
+  String _formatNumber(int n) {
+    final str = n.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(str[i]);
+    }
+    return buffer.toString();
+  }
+
+  Widget _buildCircularIconBtn({
+    required IconData icon,
+    required String tooltip,
+    required bool isDark,
+    required VoidCallback onTap,
+    bool isActive = false,
+  }) {
+    final bg = isActive
+        ? AppTheme.activePillBg(isDark)
+        : AppTheme.controlBg(isDark);
+    final fg = isActive
+        ? AppTheme.activePillText(isDark)
+        : AppTheme.textPrimary(isDark);
+
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          width: 22,
+          height: 22,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+          child: Icon(icon, size: 12.5, color: fg),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCapsuleButton({
+    required String keyLabel,
+    required String actionLabel,
+    required bool isDark,
+    required VoidCallback onTap,
+    bool isHighlighted = false,
+    bool isActuated = false,
+  }) {
+    final isInverted = isHighlighted || isActuated;
+    final bg = isInverted
+        ? AppTheme.activePillBg(isDark)
+        : AppTheme.controlBg(isDark);
+    final keyColor = isInverted
+        ? AppTheme.activePillText(isDark)
+        : AppTheme.textPrimary(isDark);
+    final labelColor = isInverted
+        ? AppTheme.activePillText(isDark)
+        : AppTheme.textMuted(isDark);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedScale(
+          scale: isActuated ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 110),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
                   keyLabel,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: textPrimary,
+                  style: AppTheme.sans(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: keyColor,
                   ),
                 ),
-              ),
-              const SizedBox(width: 3),
-              Flexible(
-                child: Text(
-                  actionLabel,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: isHighlight ? const Color(0xFF34C759) : textMuted,
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    actionLabel,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: AppTheme.sans(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w400,
+                      color: labelColor,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

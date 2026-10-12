@@ -3,8 +3,8 @@
 // See LICENSE in the project root for full license terms.
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/session_manager.dart';
+import '../theme/app_theme.dart';
 
 class HistoryDialog extends StatelessWidget {
   final SessionManager sessionManager;
@@ -16,119 +16,153 @@ class HistoryDialog extends StatelessWidget {
     required this.isDark,
   });
 
-  static Future<void> show(
+  static void show(
     BuildContext context, {
     required SessionManager sessionManager,
     required bool isDark,
   }) {
-    return showDialog(
+    showDialog(
       context: context,
-      builder: (ctx) => HistoryDialog(
-        sessionManager: sessionManager,
-        isDark: isDark,
-      ),
+      builder: (_) =>
+          HistoryDialog(sessionManager: sessionManager, isDark: isDark),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xFF141418) : Colors.white;
-    final textPrimary = isDark ? Colors.white : const Color(0xFF111111);
-    final textMuted = isDark ? const Color(0xFF7A7A80) : const Color(0xFF8E8E93);
-    final border = isDark ? const Color(0xFF26262C) : const Color(0xFFE5E5EA);
-
-    final history = sessionManager.activeSession.history;
+    final bg = AppTheme.bg(isDark);
+    final textPrimary = AppTheme.textPrimary(isDark);
+    final textMuted = AppTheme.textMuted(isDark);
 
     return StatefulBuilder(
-      builder: (dialogCtx, setModalState) {
+      builder: (context, setModalState) {
+        final active = sessionManager.activeSession;
+        final history = active.history;
+
         return Dialog(
           backgroundColor: bg,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: border, width: 1),
-          ),
+          insetPadding: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
           child: Container(
-            width: 300,
-            constraints: const BoxConstraints(maxHeight: 196),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            width: 320,
+            height: 220,
+            padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header (Title, Count & Close)
+                // Editorial Header Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Row(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.history_rounded,
-                            size: 16,
-                            color: Color(0xFF007AFF),
+                          Text(
+                            'Attempt History',
+                            style: AppTheme.sans(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              color: textPrimary,
+                            ),
                           ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              'Attempt History',
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.outfit(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.2,
-                                color: textPrimary,
-                              ),
+                          Text(
+                            '${active.name} • ${history.length} attempts',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: AppTheme.sans(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w400,
+                              color: textMuted,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: Icon(Icons.close_rounded, size: 18, color: textMuted),
-                      onPressed: () => Navigator.pop(dialogCtx),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (history.isNotEmpty)
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                            onPressed: () {
+                              active.history.clear();
+                              sessionManager.saveSessions();
+                              setModalState(() {});
+                            },
+                            child: Text(
+                              'Clear',
+                              style: AppTheme.sans(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w500,
+                                color: textMuted,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 6),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: Icon(
+                            Icons.close_rounded,
+                            size: 16,
+                            color: textMuted,
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '${sessionManager.activeSession.name} • ${history.length} attempts',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: textMuted,
-                  ),
-                ),
-                const SizedBox(height: 6),
 
-                // History List
+                const SizedBox(height: 8),
+
+                // Attempt List
                 if (history.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20.0),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 28.0,
+                      horizontal: 12.0,
+                    ),
                     child: Center(
                       child: Text(
-                        'No attempts recorded yet.\nPress F8 to log codes.',
+                        'No codes attempted for this base yet.',
                         textAlign: TextAlign.center,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11.5,
-                          color: textMuted,
-                        ),
+                        style: AppTheme.sans(fontSize: 11, color: textMuted),
                       ),
                     ),
                   )
                 else
                   Flexible(
-                    child: ListView.separated(
+                    child: ListView.builder(
                       shrinkWrap: true,
+                      padding: EdgeInsets.zero,
                       itemCount: history.length,
-                      separatorBuilder: (_, __) => Divider(height: 1, color: border),
                       itemBuilder: (ctx, index) {
                         final record = history[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 2.0),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 6.0,
+                            horizontal: 10.0,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.controlBg(isDark),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -136,21 +170,26 @@ class HistoryDialog extends StatelessWidget {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Text(
-                                      '#${index + 1}',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 10.5,
-                                        color: textMuted,
+                                    SizedBox(
+                                      width: 34,
+                                      child: Text(
+                                        '#${index + 1}',
+                                        style: AppTheme.mono(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w400,
+                                          color: textMuted,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
                                     Text(
                                       record.code,
-                                      style: GoogleFonts.jetBrainsMono(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
+                                      style: AppTheme.mono(
+                                        fontSize: 13.5,
+                                        fontWeight: record.isSolved
+                                            ? FontWeight.w500
+                                            : FontWeight.w400,
                                         color: record.isSolved
-                                            ? const Color(0xFF34C759)
+                                            ? AppTheme.statusActive
                                             : textPrimary,
                                       ),
                                     ),
@@ -160,29 +199,35 @@ class HistoryDialog extends StatelessWidget {
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  if (record.isSolved) ...[
+                                  if (record.isSolved)
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                      margin: const EdgeInsets.only(right: 6),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      margin: const EdgeInsets.only(right: 8),
                                       decoration: BoxDecoration(
-                                        color: const Color(0x3334C759),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: const Color(0xFF34C759), width: 0.6),
+                                        color: AppTheme.activePillBg(isDark),
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
                                       ),
                                       child: Text(
-                                        'SOLVED',
-                                        style: GoogleFonts.plusJakartaSans(
+                                        'Solved',
+                                        style: AppTheme.sans(
                                           fontSize: 9,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFF34C759),
+                                          fontWeight: FontWeight.w500,
+                                          color: AppTheme.activePillText(
+                                            isDark,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ],
                                   Text(
                                     record.formattedTime,
-                                    style: GoogleFonts.jetBrainsMono(
+                                    style: AppTheme.mono(
                                       fontSize: 10.5,
+                                      fontWeight: FontWeight.w400,
                                       color: textMuted,
                                     ),
                                   ),
